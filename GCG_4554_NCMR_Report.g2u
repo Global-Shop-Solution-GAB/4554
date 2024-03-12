@@ -1,0 +1,238 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("Quality Report")
+Gui.Form..Size(4395,3435)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,UnLoad)
+Gui.Form.cmd_brswr.Create(Button)
+Gui.Form.cmd_brswr.Size(480,375)
+Gui.Form.cmd_brswr.Position(2580,450)
+Gui.Form.cmd_brswr.Caption("^")
+Gui.Form.cmd_brswr.Event(Click,cmd_brswr_Click)
+Gui.Form.txtNum.Create(TextBox,"",True,1920,300,0,390,495,False,0,"Arial",8,-2147483643,1)
+Gui.Form.txtNum.Locked(True)
+Gui.Form.cmdReport.Create(Button)
+Gui.Form.cmdReport.Size(1485,375)
+Gui.Form.cmdReport.Position(1305,2415)
+Gui.Form.cmdReport.Caption("Create Report")
+Gui.Form.cmdReport.Event(Click,cmdReport_Click)
+Gui.Form.lbl1.Create(Label,"Select Values:",True,1545,255,0,135,240,True,0,"Arial",10,-2147483633,0)
+Gui.Form.lbl2.Create(Label,"CA / NCR",True,1425,255,0,525,840,True,0,"Arial",8,-2147483633,0)
+Gui.Form.dtpBeg.Create(DatePicker)
+Gui.Form.dtpBeg.Size(1935,285)
+Gui.Form.dtpBeg.Position(45,1785)
+Gui.Form.dtpEnd.Create(DatePicker)
+Gui.Form.dtpEnd.Size(1935,285)
+Gui.Form.dtpEnd.Position(2145,1800)
+Gui.Form.lbl3.Create(Label,"Date Range:",True,1455,255,0,105,1275,True,0,"Arial",10,-2147483633,0)
+Gui.Form.lbl4.Create(Label,"From",True,660,255,0,90,1560,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl5.Create(Label,"To",True,390,255,0,2190,1560,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+Function.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+GUI.Form..Show
+GUI.Form.txtNum.SetFocus
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4554_NCMR_Report.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.cmd_brswr_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmd_brswr_Click_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+V.Local..BulkDeclareString(sRet, sTemp)
+'browser for quality number
+Function.Intrinsic.UI.SetBrowserHotTypeAhead(TRUE)
+
+'create datatable > dataview > to string for browser
+F.Data.DataTable.CreateFromSQL("NUM", "con", "Select CNCA_NO,  CONTROL_NUMBER From CNCA Union Select CNCA_NO,  CONTROL_NUMBER From CNCA_HISTORY")
+F.Data.DataView.Create("NUM", "NUM_V")
+F.Data.DataView.ToString("NUM", "NUM_V", "CNCA_NO*!*CONTROL_NUMBER", "*!*", "$!$", V.Local.sRet)
+
+F.Intrinsic.UI.BrowserFromString("Choose NCR or CA",  V.Local.sRet, "*!*", "$!$", "CA*!*NCR", "500*!*500",  V.Local.sTemp )
+
+' what the user selects
+F.Intrinsic.Control.If(V.Local.sTemp, =, "***CANCEL***")
+	F.Intrinsic.UI.Msgbox("Quality Number Not Selected")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Else
+	F.Intrinsic.String.Replace(V.Local.sTemp, "*!*", " / ", V.Local.sTemp)
+	GUI.Form.txtNum.Text(V.Local.sTemp)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("cmd_brswr_Click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4554_NCMR_Report.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmd_brswr_Click.End
+
+Program.Sub.cmdReport_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdReport_Click_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+V.Local..BulkDeclareString(ssql,  sTemp, sRet, sDesc, sCNC, sFields, sValues, sFailNotes, sCause, sSeq, sCA, sSignOff, sNCR, sBegDate, sEndDate, sPath)
+V.Local..BulkDeclareLong(iRptID, iRunID, iLogID, iRet, iC)
+
+'this is nice, if V.Screen.Form!txtNum.Text= '' then use dates
+V.Local.sTemp.Set(V.Screen.Form!txtNum.Text)
+F.Intrinsic.Control.If(V.Local.sTemp, =, "")
+	'then they choose dates> need to set the temp variables
+	V.Local.sBegDate.Set(V.Screen.Form!dtpBeg.Text)
+	V.Local.sEndDate.Set(V.Screen.Form!dtpEnd.Text)
+	F.Intrinsic.String.Build("Select CONTROL_NUMBER From V_QUALITY Where DATE_QUALITY Between '{0}' and '{1}'  UNION Select CNTRL_NUMBER From V_QUAL_HIST Where DATE_QUAL_HIST Between '{0}' and '{1}' ", V.Local.sBegDate.PervasiveDate, V.Local.sEndDate.PervasiveDate, V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.ssql, V.Local.sRet)
+	F.Intrinsic.String.Replace(V.Local.sRet, "*!*", "", V.Local.sRet)
+	F.Intrinsic.String.Replace(V.Local.sRet, "#$#", "','", V.Local.sRet)
+	F.Intrinsic.String.Build("Select CNCA_NO As CNC, CONTROL_NUMBER As NCR From CNCA Where CONTROL_NUMBER In ('{0}')  UNION Select CNCA_NO As CNC, CONTROL_NUMBER As NCR From CNCA_HISTORY", V.Local.sRet, V.Local.ssql)
+	F.Data.DataTable.CreateFromSQL("TEMP", "con", V.Local.ssql)
+F.Intrinsic.Control.Else
+	'split the value
+	F.Intrinsic.String.Split(V.Local.sTemp, " / ", V.Local.sTemp)
+	V.Local.sCNC.Set(V.Local.sTemp(0))
+	V.Local.sNCR.Set(V.Local.sTemp(1))
+	'create datatable
+	F.Data.Datatable.Create("TEMP", TRUE)
+	F.Data.Datatable.AddColumn(  "TEMP","CNC", "String")
+	F.Data.Datatable.AddColumn(  "TEMP","NCR", "String")
+	F.Data.DataTable.AddRow("TEMP", "CNC",  V.Local.sCNC, "NCR", V.Local.sNCR)
+F.Intrinsic.Control.EndIf
+
+'continue
+GUI.Form..Visible(False)
+'delete all from table
+F.ODBC.Connection!con.Execute("Delete From GCG_4554_NCMR_Report")
+
+'loop through table
+F.Intrinsic.Control.For(V.Local.iC, 0, V.DataTable.TEMP.RowCount--, 1)
+
+	V.Local.sCNC.Set(V.Datatable.TEMP(V.Local.iC).CNC!FieldValTrim)
+	V.Local.sNCR.Set(V.Datatable.TEMP(V.Local.iC).NCR!FieldValTrim)	
+
+	'gather data
+	F.Intrinsic.String.Build("Select CONTROL_NUMBER, JOB, PURCHASE_ORDER, SCRAP_CODE, PART, Description,DATE_QUALITY,  QTY_REJECTED From V_QUALITY Where CONTROL_NUMBER = '{0}' UNION Select CNTRL_NUMBER, JOB, PURCHASE_ORDER, SCRAP_CODE, PART, Description, DATE_QUAL_HIST,  QTY_REJECTED From V_QUAL_HIST Where CNTRL_NUMBER = '{0}'", V.Local.sNCR, V.Local.ssql)
+	F.Data.DataTable.CreateFromSQL("QUALITY", "con", V.Local.ssql)
+	
+''	F.Intrinsic.String.Build("Select Top 1DISCREPANCY From QUALITY_DISP Where CONTROL_NUMBER = '{0}' UNION Select Top 1DISCREPANCY From QUAL_DISP_HIST Where CNTRL_NUMBER = '{0}' ", V.Local.sNCR, V.Local.ssql)
+''	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sDesc)
+''	F.Intrinsic.String.Build("Select DISCREP_DESC From QUALITY_DISCRP_CD  Where  DISCREP_CODE = '{0}' And SYS = 'QUA' And SUB_SYS = 'DIS'", V.Local.sDesc, V.Local.ssql)
+''	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sDesc)
+	
+	'Failure Description
+	F.Intrinsic.String.Build("Select TEXT From QUAL_MSTR_NOTES Where NUMBER = '{0}' And SEQ = '000' UNION  Select TEXT From QUAL_MSTR_H_NOTES Where NUMBER = '{0}' And SEQ = '000'   ", V.Local.sNCR, V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sFailNotes)
+	
+	'type Cause
+	F.Intrinsic.String.Build("Select Top 1CNCA_SEQ From CNCA Where CNCA_NO = '{0}' And Step_Type = 'Cause' UNION Select Top 1CNCA_SEQ From CNCA_HISTORY Where CNCA_NO = '{0}' And Step_Type = 'Cause' ", V.Local.sCNC, V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sSeq)
+	F.Intrinsic.String.Build("Select Text_1 From CNCA_Notes Where CNCA_NO = '{0}' And CNCA_SEQ = '{1}' UNION Select Text1 From CNCA_HIST_Notes Where CNCA_NO = '{0}' And NOTES_SEQ = '{1}' ", V.Local.sCNC, V.Local.sSeq , V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sCause)
+	
+	'type Corrective Action
+	F.Intrinsic.String.Build("Select Top 1CNCA_SEQ From CNCA Where CNCA_NO = '{0}' And Step_Type = 'Corrective Action' UNION Select Top 1CNCA_SEQ From CNCA_HISTORY Where CNCA_NO = '{0}' And Step_Type = 'Corrective Action' ", V.Local.sCNC, V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sSeq)
+	F.Intrinsic.String.Build("Select Text_1 From CNCA_Notes Where CNCA_NO = '{0}' And CNCA_SEQ = '{1}' UNION Select Text1 From CNCA_HIST_Notes Where CNCA_NO = '{0}' And NOTES_SEQ = '{1}'  ", V.Local.sCNC, V.Local.sSeq , V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sCA)
+	
+	'type Final Signoff
+	F.Intrinsic.String.Build("Select Top 1CNCA_SEQ From CNCA Where CNCA_NO = '{0}' And Step_Type = 'Final Signoff'  UNION Select Top 1CNCA_SEQ From CNCA_HISTORY Where CNCA_NO = '{0}' And Step_Type = 'Final Signoff'", V.Local.sCNC, V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sSeq)
+	F.Intrinsic.String.Build("Select Text_1 From CNCA_Notes Where CNCA_NO = '{0}' And CNCA_SEQ = '{1}'  UNION Select Text1 From CNCA_HIST_Notes Where CNCA_NO = '{0}' And NOTES_SEQ = '{1}'", V.Local.sCNC, V.Local.sSeq , V.Local.ssql)
+	F.ODBC.Connection!con.ExecuteandReturn(V.Local.ssql, V.Local.sSignOff)
+	
+	'save to database
+	V.Local.sFields.Set("NCR, PART, WO, PO, DATE_CREATED, SCRAP_CODE, DESCRIPTION, QTY_REJECTED, CNC, FAIL_NOTES, CAUSE, CA, Sign_Off")
+	F.Intrinsic.String.Build("  '{0}',  '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}'", V.Local.sNCR,  V.DataTable.QUALITY(0).PART!FieldValTrim,  V.DataTable.QUALITY(0).JOB!FieldValTrim,V.DataTable.QUALITY(0).PURCHASE_ORDER!FieldValTrim, V.DataTable.QUALITY(0).DATE_QUALITY!FieldValTrim, V.DataTable.QUALITY(0).SCRAP_CODE!FieldValTrim, V.DataTable.QUALITY(0).DESCRIPTION!FieldValStringPSQLFriendly, V.DataTable.QUALITY(0).QTY_REJECTED!FieldValTrim, V.Local.sCNC,  V.Local.sFailNotes.PSQLFriendly, V.Local.sCause.PSQLFriendly, V.Local.sCA.PSQLFriendly,V.Local.sSignOff.PSQLFriendly,V.Local.sValues)
+	F.Intrinsic.String.Build("Insert Into GCG_4554_NCMR_Report  ({0}) Values ({1})", V.Local.sFields, V.Local.sValues, V.Local.ssql)
+	F.ODBC.Connection!con.Execute(V.Local.ssql)
+	
+	'close quality
+	F.Data.DataTable.Close("QUALITY")
+	
+F.Intrinsic.Control.Next(V.Local.iC)	
+
+'get BI run ID
+F.Global.BI.GetRunID(V.Local.iRunID)
+'call report
+Function.Global.BI.GetIDFromName("GCG_4554_NCMR_Report.rpt", V.Local.iRptID)
+'Request BI Log ID:
+F.Global.BI.StartLogging(V.Local.iRunID,  V.Local.iRptID, -1,  "", V.Local.iLogID)
+'stop logging
+F.Global.BI.StopLogging(V.Local.iLogID)
+
+'print report
+F.Global.BI.RunReportPreProcessor(V.Local.iRunID, V.Local.iLogID, "", "", "", 16, True, "", -1, "", -1, "", "",V.Local.iRet)
+
+'add excel- 
+F.Intrinsic.UI.Msgbox("Print Excel?", "Print",4, V.Local.sRet)
+Function.Intrinsic.Control.If(V.Local.sRet, =, 6)
+	F.Data.DataTable.CreateFromSQL( "EX", "con", "Select *  From GCG_4554_NCMR_Report")
+	F.Data.DataView.Create("EX", "EX_V")
+	F.Data.DataView.ToString("EX", "EX_V", "DATE_CREATED*!*WO*!*PO*!*NCR*!*CNC*!*PART*!*Description*!*QTY_REJECTED*!*SCRAP_CODE*!*FAIL_NOTES*!*CAUSE*!*CA*!*SIGN_OFF", "*!*", "$!$", V.Local.sRet) 
+	F.Intrinsic.String.Replace(V.Local.sRet, V.Ambient.NewLine, " ", V.Local.sRet)
+	F.Intrinsic.String.Replace(V.Local.sRet, "$!$", V.Ambient.NewLine, V.Local.sRet)
+	F.Intrinsic.String.Replace(V.Local.sRet, "*!*", "	", V.Local.sRet)
+
+	F.Intrinsic.String.Build("Date	Work Order	Purchase Order	NCR	Cause and CA	Part Number	Description	Qty	Scrap Code	Failure Description	Cause	Corrective Action	Disposition {0}{1}",  V.Ambient.NewLine,V.Local.sRet, V.Local.sRet)
+	F.Intrinsic.UI.ShowSaveFileDialog("", "xlsx|*xlsx|xls|*xls", "", V.Local.sPath)
+	F.Intrinsic.String.Build("{0}.xls", V.Local.sPath, V.Local.sPath)
+	F.Intrinsic.File.String2File(V.Local.sPath, V.Local.sRet)
+Function.Intrinsic.Control.EndIf
+'close the program
+F.Intrinsic.Control.CallSub(Unload)
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("cmdReport_Click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4554_NCMR_Report.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdReport_Click.End
+
+Program.Sub.UnLoad.Start
+F.Intrinsic.Control.SetErrorHandler("UnLoad_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+Function.ODBC.Connection!con.Close
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("UnLoad_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4554_NCMR_Report.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.End
+
+Function.Intrinsic.Control.EndIf
+Program.Sub.UnLoad.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$$}$12:00:00 AM$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$This project will create a CSV file that will contain Accounts Payable and Payroll check information
+
+Program.Sub.Comments.End
+
